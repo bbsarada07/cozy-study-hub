@@ -48,7 +48,7 @@ const Index = () => {
         <button
           className="mt-4 rounded-full bg-primary px-10 py-3 text-lg font-semibold text-primary-foreground shadow-lg transition-transform hover:scale-105 hover:shadow-xl active:scale-95"
           style={{ fontFamily: "'Times New Roman', Times, serif" }}
-          onClick={() => {}}
+          onClick={() => navigate("/profile")}
         >
           Get Started
         </button>
