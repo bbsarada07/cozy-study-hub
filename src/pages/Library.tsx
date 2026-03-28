@@ -148,6 +148,9 @@ const Library = () => {
             {featureItems.map((item) => (
               <button
                 key={item.id}
+                onClick={() => {
+                  if (item.id === "braindump") navigate("/braindump");
+                }}
                 className="group flex flex-col items-center gap-2 rounded-2xl p-3 transition-all duration-200 hover:scale-105 hover:shadow-xl active:scale-95"
                 style={{
                   gridArea: item.gridArea,
