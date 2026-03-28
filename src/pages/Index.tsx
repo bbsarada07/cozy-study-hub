@@ -1,7 +1,9 @@
+import { useNavigate } from "react-router-dom";
 import libraryBg from "@/assets/library-bg.png";
 import logo from "@/assets/funtaskit-logo.png";
 
 const Index = () => {
+  const navigate = useNavigate();
   return (
     <div className="relative flex min-h-screen items-center justify-center overflow-hidden">
       {/* Background image */}
@@ -46,7 +48,7 @@ const Index = () => {
         <button
           className="mt-4 rounded-full bg-primary px-10 py-3 text-lg font-semibold text-primary-foreground shadow-lg transition-transform hover:scale-105 hover:shadow-xl active:scale-95"
           style={{ fontFamily: "'Times New Roman', Times, serif" }}
-          onClick={() => {}}
+          onClick={() => navigate("/profile")}
         >
           Get Started
         </button>
