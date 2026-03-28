@@ -1,7 +1,9 @@
+import { useNavigate } from "react-router-dom";
 import libraryBg from "@/assets/library-bg.png";
 import logo from "@/assets/funtaskit-logo.png";
 
 const Index = () => {
+  const navigate = useNavigate();
   return (
     <div className="relative flex min-h-screen items-center justify-center overflow-hidden">
       {/* Background image */}
