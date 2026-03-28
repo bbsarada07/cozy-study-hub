@@ -250,9 +250,7 @@ const Profile = () => {
           disabled={!isFormValid}
           className="w-full rounded-full bg-primary px-10 py-3.5 text-lg font-semibold text-primary-foreground shadow-lg transition-all hover:scale-[1.02] hover:shadow-xl active:scale-95 disabled:opacity-40 disabled:hover:scale-100"
           style={{ fontFamily: "'Times New Roman', Times, serif" }}
-          onClick={() => {
-            // TODO: save profile data
-          }}
+          onClick={() => navigate("/library")}
         >
           Save Profile
         </button>
