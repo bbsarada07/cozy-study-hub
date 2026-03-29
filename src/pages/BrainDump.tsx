@@ -397,7 +397,7 @@ const BrainDump = () => {
           )}
 
           {/* Kanban Task Board */}
-          {showTasks && tasks.length > 0 && (
+          {tasks.length > 0 && (
             <TaskBoard tasks={tasks} onUpdateTasks={setTasks} />
           )}
 
