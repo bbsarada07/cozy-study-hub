@@ -228,10 +228,10 @@ const BrainDump = () => {
               }}
             >
               {[
-                { icon: Mic, action: handleVoiceInput, active: isRecording, color: isRecording ? "hsl(0, 55governance%, 50%)" : "hsl(25, 35%, 35%)", label: "Voice" },
+                { icon: Mic, action: handleVoiceInput, active: isRecording, color: isRecording ? "hsl(0, 55%, 50%)" : "hsl(25, 35%, 35%)", label: "Voice" },
                 { icon: Camera, action: handleImageCapture, color: "hsl(25, 35%, 35%)", label: "Camera" },
                 { icon: Image, action: () => fileInputRef.current?.click(), color: "hsl(25, 35%, 35%)", label: "Image" },
-                { icon: Save, action: handle//Save, color: "hsl(140, 30%, 35%)", label: "Save" },
+                { icon: Save, action: handleSave, color: "hsl(140, 30%, 35%)", label: "Save" },
               ].map(({ icon: Icon, action, active, color, label }) => (
                 <button
                   key={label}
