@@ -11,15 +11,7 @@ import libraryBg from "@/assets/library-room.png";
 const FONT = "'Times New Roman', Times, serif";
 const HANDWRITING_FONT = "'Segoe Script', 'Comic Sans MS', 'Brush Script MT', cursive";
 
-interface Task {
-  id: number;
-  text: string;
-  done: boolean;
-  priority: "high" | "medium" | "low";
-  detectedDate?: Date;
-  suggestedTime?: string;
-  estimatedDuration?: string;
-}
+// Re-use BoardTask type from TaskBoard
 
 interface SavedEvent {
   date: Date;
