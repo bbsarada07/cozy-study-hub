@@ -188,23 +188,7 @@ const BrainDump = () => {
     }
   };
 
-  const toggleTask = (id: number) => {
-    setTasks((prev) => prev.map((t) => (t.id === id ? { ...t, done: !t.done } : t)));
-  };
-
-  const priorityColor = (p: string) => {
-    if (p === "high") return "hsl(0, 70%, 45%)";
-    if (p === "medium") return "hsl(36, 70%, 42%)";
-    return "hsl(120, 30%, 38%)";
-  };
-
-  const priorityLabel = (p: string) => {
-    if (p === "high") return "High";
-    if (p === "medium") return "Medium";
-    return "Low";
-  };
-
-  const eventDates = savedEvents.map((e) => e.date);
+  // Removed old toggleTask, priorityColor, priorityLabel — now in TaskBoard
 
   const linedBg = `repeating-linear-gradient(
     transparent,
