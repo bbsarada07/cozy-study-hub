@@ -1,7 +1,8 @@
 import { useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Mic, Camera, Image, Save, CheckSquare, Square, Sparkles, CalendarDays, Clock, Bell, X } from "lucide-react";
-import { format, addDays, parse, isValid } from "date-fns";
+import { ArrowLeft, Mic, Camera, Image, Save, CalendarDays, Bell, X } from "lucide-react";
+import { format, addDays, isValid } from "date-fns";
+import TaskBoard, { type BoardTask } from "@/components/TaskBoard";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
@@ -10,15 +11,7 @@ import libraryBg from "@/assets/library-room.png";
 const FONT = "'Times New Roman', Times, serif";
 const HANDWRITING_FONT = "'Segoe Script', 'Comic Sans MS', 'Brush Script MT', cursive";
 
-interface Task {
-  id: number;
-  text: string;
-  done: boolean;
-  priority: "high" | "medium" | "low";
-  detectedDate?: Date;
-  suggestedTime?: string;
-  estimatedDuration?: string;
-}
+// Re-use BoardTask type from TaskBoard
 
 interface SavedEvent {
   date: Date;
@@ -96,8 +89,7 @@ const BrainDump = () => {
   const navigate = useNavigate();
   const [noteText, setNoteText] = useState("");
   const [isRecording, setIsRecording] = useState(false);
-  const [tasks, setTasks] = useState<Task[]>([]);
-  const [showTasks, setShowTasks] = useState(false);
+  const [tasks, setTasks] = useState<BoardTask[]>([]);
   const [savedEvents, setSavedEvents] = useState<SavedEvent[]>([]);
   const [showCalendar, setShowCalendar] = useState(false);
   const [pendingEvent, setPendingEvent] = useState<SavedEvent | null>(null);
@@ -140,7 +132,7 @@ const BrainDump = () => {
 
     const lines = noteText.split("\n").filter((l) => l.trim());
     const detectedEvents: SavedEvent[] = [];
-    const prioritized: Task[] = lines.map((line, i) => {
+    const prioritized: BoardTask[] = lines.map((line, i) => {
       let priority: "high" | "medium" | "low" = "low";
       const lower = line.toLowerCase();
       if (lower.includes("deadline") || lower.includes("urgent") || lower.includes("exam") || lower.includes("due") || lower.includes("test")) {
@@ -157,7 +149,7 @@ const BrainDump = () => {
       return {
         id: i + 1,
         text: line.replace(/^\[.*?\]\s*/, ""),
-        done: false,
+        status: "todo" as const,
         priority,
         detectedDate,
         suggestedTime: suggestTime(priority),
@@ -169,7 +161,7 @@ const BrainDump = () => {
     prioritized.sort((a, b) => order[a.priority] - order[b.priority]);
 
     setTasks(prioritized);
-    setShowTasks(true);
+    // showTasks is derived from tasks.length > 0
 
     // Handle detected dates - show calendar
     if (detectedEvents.length > 0) {
@@ -194,22 +186,6 @@ const BrainDump = () => {
         }
       });
     }
-  };
-
-  const toggleTask = (id: number) => {
-    setTasks((prev) => prev.map((t) => (t.id === id ? { ...t, done: !t.done } : t)));
-  };
-
-  const priorityColor = (p: string) => {
-    if (p === "high") return "hsl(0, 70%, 45%)";
-    if (p === "medium") return "hsl(36, 70%, 42%)";
-    return "hsl(120, 30%, 38%)";
-  };
-
-  const priorityLabel = (p: string) => {
-    if (p === "high") return "High";
-    if (p === "medium") return "Medium";
-    return "Low";
   };
 
   const eventDates = savedEvents.map((e) => e.date);
@@ -404,83 +380,9 @@ const BrainDump = () => {
             </div>
           )}
 
-          {/* AI-Prioritized Tasks with Suggested Schedule */}
-          {showTasks && tasks.length > 0 && (
-            <div
-              className="mx-auto mt-5 w-full max-w-lg rounded-2xl p-5 shadow-xl"
-              style={{
-                backgroundColor: "hsla(40, 30%, 96%, 0.95)",
-                border: "1px solid hsla(25, 20%, 80%, 0.5)",
-              }}
-            >
-              <div className="mb-4 flex items-center gap-2">
-                <Sparkles className="h-5 w-5" style={{ color: "hsl(36, 70%, 42%)" }} />
-                <h2
-                  className="text-lg font-extrabold"
-                  style={{ fontFamily: FONT, color: "hsl(25, 50%, 12%)" }}
-                >
-                  AI-Prioritized Tasks
-                </h2>
-              </div>
-
-              <div className="space-y-3">
-                {tasks.map((task) => (
-                  <div
-                    key={task.id}
-                    className="rounded-xl px-3 py-3 transition-all"
-                    style={{
-                      backgroundColor: "hsla(40, 30%, 98%, 0.9)",
-                      border: "1px solid hsla(25, 20%, 85%, 0.4)",
-                    }}
-                  >
-                    <button
-                      onClick={() => toggleTask(task.id)}
-                      className="flex w-full items-start gap-3 text-left"
-                    >
-                      {task.done ? (
-                        <CheckSquare className="mt-0.5 h-5 w-5 shrink-0" style={{ color: "hsl(120, 35%, 40%)" }} />
-                      ) : (
-                        <Square className="mt-0.5 h-5 w-5 shrink-0" style={{ color: "hsl(25, 30%, 50%)" }} />
-                      )}
-                      <span
-                        className={`flex-1 text-[15px] font-semibold ${task.done ? "line-through opacity-40" : ""}`}
-                        style={{ fontFamily: FONT, color: "hsl(25, 55%, 12%)" }}
-                      >
-                        {task.text}
-                      </span>
-                      <span
-                        className="shrink-0 rounded-full px-2.5 py-0.5 text-xs font-bold"
-                        style={{ backgroundColor: priorityColor(task.priority), color: "hsl(0, 0%, 100%)" }}
-                      >
-                        {priorityLabel(task.priority)}
-                      </span>
-                    </button>
-
-                    {/* Suggested schedule row */}
-                    <div className="mt-2 flex flex-wrap items-center gap-3 pl-8">
-                      <div className="flex items-center gap-1">
-                        <Clock className="h-3.5 w-3.5" style={{ color: "hsl(36, 70%, 42%)" }} />
-                        <span className="text-xs font-semibold" style={{ fontFamily: FONT, color: "hsl(25, 50%, 25%)" }}>
-                          {task.suggestedTime}
-                        </span>
-                      </div>
-                      <span className="text-xs font-medium" style={{ color: "hsl(25, 30%, 40%)" }}>•</span>
-                      <span className="text-xs font-semibold" style={{ fontFamily: FONT, color: "hsl(25, 50%, 25%)" }}>
-                        ⏱ {task.estimatedDuration}
-                      </span>
-                      {task.detectedDate && (
-                        <>
-                          <span className="text-xs font-medium" style={{ color: "hsl(25, 30%, 40%)" }}>•</span>
-                          <span className="text-xs font-semibold" style={{ fontFamily: FONT, color: "hsl(0, 60%, 40%)" }}>
-                            📅 {format(task.detectedDate, "MMM d")}
-                          </span>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
+          {/* Kanban Task Board */}
+          {tasks.length > 0 && (
+            <TaskBoard tasks={tasks} onUpdateTasks={setTasks} />
           )}
 
           {/* Previous Entries */}
