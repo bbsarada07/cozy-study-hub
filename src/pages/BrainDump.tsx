@@ -89,8 +89,7 @@ const BrainDump = () => {
   const navigate = useNavigate();
   const [noteText, setNoteText] = useState("");
   const [isRecording, setIsRecording] = useState(false);
-  const [tasks, setTasks] = useState<Task[]>([]);
-  const [showTasks, setShowTasks] = useState(false);
+  const [tasks, setTasks] = useState<BoardTask[]>([]);
   const [savedEvents, setSavedEvents] = useState<SavedEvent[]>([]);
   const [showCalendar, setShowCalendar] = useState(false);
   const [pendingEvent, setPendingEvent] = useState<SavedEvent | null>(null);
