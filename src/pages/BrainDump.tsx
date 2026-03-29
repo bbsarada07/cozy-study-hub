@@ -132,7 +132,7 @@ const BrainDump = () => {
 
     const lines = noteText.split("\n").filter((l) => l.trim());
     const detectedEvents: SavedEvent[] = [];
-    const prioritized: Task[] = lines.map((line, i) => {
+    const prioritized: BoardTask[] = lines.map((line, i) => {
       let priority: "high" | "medium" | "low" = "low";
       const lower = line.toLowerCase();
       if (lower.includes("deadline") || lower.includes("urgent") || lower.includes("exam") || lower.includes("due") || lower.includes("test")) {
@@ -149,7 +149,7 @@ const BrainDump = () => {
       return {
         id: i + 1,
         text: line.replace(/^\[.*?\]\s*/, ""),
-        done: false,
+        status: "todo" as const,
         priority,
         detectedDate,
         suggestedTime: suggestTime(priority),
