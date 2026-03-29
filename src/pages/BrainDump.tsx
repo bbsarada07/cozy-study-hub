@@ -1,7 +1,8 @@
 import { useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Mic, Camera, Image, Save, CheckSquare, Square, Sparkles, CalendarDays, Clock, Bell, X } from "lucide-react";
-import { format, addDays, parse, isValid } from "date-fns";
+import { ArrowLeft, Mic, Camera, Image, Save, CalendarDays, Bell, X } from "lucide-react";
+import { format, addDays, isValid } from "date-fns";
+import TaskBoard, { type BoardTask } from "@/components/TaskBoard";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
