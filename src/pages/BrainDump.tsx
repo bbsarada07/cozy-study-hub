@@ -1,6 +1,9 @@
 import { useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Mic, Camera, Image, Save, CheckSquare, Square, Sparkles } from "lucide-react";
+import { ArrowLeft, Mic, Camera, Image, Save, CheckSquare, Square, Sparkles, CalendarDays, Clock, Bell, X } from "lucide-react";
+import { format, addDays, parse, isValid } from "date-fns";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
 import libraryBg from "@/assets/library-room.png";
 
@@ -12,6 +15,14 @@ interface Task {
   text: string;
   done: boolean;
   priority: "high" | "medium" | "low";
+  detectedDate?: Date;
+  suggestedTime?: string;
+  estimatedDuration?: string;
+}
+
+interface SavedEvent {
+  date: Date;
+  title: string;
 }
 
 const previousEntries = [
@@ -20,12 +31,77 @@ const previousEntries = [
   { id: 3, text: "Research paper outline due Friday", date: "Mar 24" },
 ];
 
+// Date detection patterns
+const DATE_PATTERNS = [
+  { regex: /\b(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})\b/i, parse: (m: RegExpMatchArray) => {
+    const year = m[3].length === 2 ? 2000 + parseInt(m[3]) : parseInt(m[3]);
+    return new Date(year, parseInt(m[1]) - 1, parseInt(m[2]));
+  }},
+  { regex: /\b(january|february|march|april|may|june|july|august|september|october|november|december)\s+(\d{1,2})(?:st|nd|rd|th)?\s*,?\s*(\d{4})?\b/i, parse: (m: RegExpMatchArray) => {
+    const months: Record<string, number> = { january:0,february:1,march:2,april:3,may:4,june:5,july:6,august:7,september:8,october:9,november:10,december:11 };
+    const year = m[3] ? parseInt(m[3]) : new Date().getFullYear();
+    return new Date(year, months[m[1].toLowerCase()], parseInt(m[2]));
+  }},
+  { regex: /\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\s+(\d{1,2})(?:st|nd|rd|th)?\s*,?\s*(\d{4})?\b/i, parse: (m: RegExpMatchArray) => {
+    const months: Record<string, number> = { jan:0,feb:1,mar:2,apr:3,may:4,jun:5,jul:6,aug:7,sep:8,oct:9,nov:10,dec:11 };
+    const year = m[3] ? parseInt(m[3]) : new Date().getFullYear();
+    return new Date(year, months[m[1].toLowerCase()], parseInt(m[2]));
+  }},
+  { regex: /\b(tomorrow)\b/i, parse: () => addDays(new Date(), 1) },
+  { regex: /\b(day after tomorrow)\b/i, parse: () => addDays(new Date(), 2) },
+  { regex: /\bnext\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/i, parse: (m: RegExpMatchArray) => {
+    const days: Record<string, number> = { sunday:0,monday:1,tuesday:2,wednesday:3,thursday:4,friday:5,saturday:6 };
+    const target = days[m[1].toLowerCase()];
+    const today = new Date();
+    const diff = (target - today.getDay() + 7) % 7 || 7;
+    return addDays(today, diff);
+  }},
+  { regex: /\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/i, parse: (m: RegExpMatchArray) => {
+    const days: Record<string, number> = { sunday:0,monday:1,tuesday:2,wednesday:3,thursday:4,friday:5,saturday:6 };
+    const target = days[m[1].toLowerCase()];
+    const today = new Date();
+    let diff = (target - today.getDay() + 7) % 7;
+    if (diff === 0) diff = 7;
+    return addDays(today, diff);
+  }},
+];
+
+function detectDates(text: string): Date | undefined {
+  for (const pattern of DATE_PATTERNS) {
+    const match = text.match(pattern.regex);
+    if (match) {
+      const date = pattern.parse(match);
+      if (isValid(date)) return date;
+    }
+  }
+  return undefined;
+}
+
+function suggestTime(priority: "high" | "medium" | "low"): string {
+  if (priority === "high") return "Morning (8:00 AM – 10:00 AM)";
+  if (priority === "medium") return "Afternoon (2:00 PM – 4:00 PM)";
+  return "Evening (6:00 PM – 7:00 PM)";
+}
+
+function estimateDuration(text: string): string {
+  const lower = text.toLowerCase();
+  if (lower.includes("exam") || lower.includes("test")) return "2–3 hours";
+  if (lower.includes("project") || lower.includes("paper") || lower.includes("research")) return "3–4 hours";
+  if (lower.includes("study") || lower.includes("review")) return "1–2 hours";
+  if (lower.includes("read") || lower.includes("chapter")) return "45 min – 1 hour";
+  return "30 min – 1 hour";
+}
+
 const BrainDump = () => {
   const navigate = useNavigate();
   const [noteText, setNoteText] = useState("");
   const [isRecording, setIsRecording] = useState(false);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [showTasks, setShowTasks] = useState(false);
+  const [savedEvents, setSavedEvents] = useState<SavedEvent[]>([]);
+  const [showCalendar, setShowCalendar] = useState(false);
+  const [pendingEvent, setPendingEvent] = useState<SavedEvent | null>(null);
+  const [notification, setNotification] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -62,25 +138,62 @@ const BrainDump = () => {
   const handleSave = () => {
     if (!noteText.trim()) return;
 
-    // AI-like task extraction and prioritization
     const lines = noteText.split("\n").filter((l) => l.trim());
+    const detectedEvents: SavedEvent[] = [];
     const prioritized: Task[] = lines.map((line, i) => {
       let priority: "high" | "medium" | "low" = "low";
       const lower = line.toLowerCase();
-      if (lower.includes("deadline") || lower.includes("urgent") || lower.includes("exam") || lower.includes("due")) {
+      if (lower.includes("deadline") || lower.includes("urgent") || lower.includes("exam") || lower.includes("due") || lower.includes("test")) {
         priority = "high";
-      } else if (lower.includes("project") || lower.includes("submit") || lower.includes("important") || lower.includes("study")) {
+      } else if (lower.includes("project") || lower.includes("submit") || lower.includes("important") || lower.includes("study") || lower.includes("review")) {
         priority = "medium";
       }
-      return { id: i + 1, text: line.replace(/^\[.*?\]\s*/, ""), done: false, priority };
+
+      const detectedDate = detectDates(line);
+      if (detectedDate) {
+        detectedEvents.push({ date: detectedDate, title: line.replace(/^\[.*?\]\s*/, "") });
+      }
+
+      return {
+        id: i + 1,
+        text: line.replace(/^\[.*?\]\s*/, ""),
+        done: false,
+        priority,
+        detectedDate,
+        suggestedTime: suggestTime(priority),
+        estimatedDuration: estimateDuration(line),
+      };
     });
 
-    // Sort by priority
     const order = { high: 0, medium: 1, low: 2 };
     prioritized.sort((a, b) => order[a.priority] - order[b.priority]);
 
     setTasks(prioritized);
     setShowTasks(true);
+
+    // Handle detected dates - show calendar
+    if (detectedEvents.length > 0) {
+      setPendingEvent(detectedEvents[0]);
+      setShowCalendar(true);
+      setSavedEvents((prev) => [...prev, ...detectedEvents]);
+
+      // Schedule notification simulation for day before
+      detectedEvents.forEach((ev) => {
+        const dayBefore = addDays(ev.date, -1);
+        const now = new Date();
+        const msUntilNotify = dayBefore.getTime() - now.getTime();
+        if (msUntilNotify > 0 && msUntilNotify < 86400000 * 7) {
+          setTimeout(() => {
+            setNotification(`📅 Reminder: "${ev.title}" is tomorrow (${format(ev.date, "MMM d")})`);
+          }, Math.min(msUntilNotify, 5000)); // cap at 5s for demo
+        } else {
+          // Show immediate notification for demo
+          setTimeout(() => {
+            setNotification(`📅 Saved: "${ev.title}" on ${format(ev.date, "MMM d, yyyy")}. You'll be reminded a day before.`);
+          }, 800);
+        }
+      });
+    }
   };
 
   const toggleTask = (id: number) => {
@@ -88,23 +201,24 @@ const BrainDump = () => {
   };
 
   const priorityColor = (p: string) => {
-    if (p === "high") return "hsl(0, 70%, 55%)";
-    if (p === "medium") return "hsl(36, 70%, 50%)";
-    return "hsl(120, 30%, 45%)";
+    if (p === "high") return "hsl(0, 70%, 45%)";
+    if (p === "medium") return "hsl(36, 70%, 42%)";
+    return "hsl(120, 30%, 38%)";
   };
 
   const priorityLabel = (p: string) => {
-    if (p === "high") return "Urgent";
-    if (p === "medium") return "Important";
-    return "Later";
+    if (p === "high") return "High";
+    if (p === "medium") return "Medium";
+    return "Low";
   };
 
-  // Generate lined-paper background
+  const eventDates = savedEvents.map((e) => e.date);
+
   const linedBg = `repeating-linear-gradient(
     transparent,
-    transparent 31px,
-    hsla(25, 20%, 70%, 0.3) 31px,
-    hsla(25, 20%, 70%, 0.3) 32px
+    transparent 35px,
+    hsla(25, 20%, 70%, 0.3) 35px,
+    hsla(25, 20%, 70%, 0.3) 36px
   )`;
 
   return (
@@ -115,6 +229,20 @@ const BrainDump = () => {
         className="absolute inset-0"
         style={{ backdropFilter: "blur(14px)", backgroundColor: "hsla(35, 30%, 85%, 0.6)" }}
       />
+
+      {/* Notification banner */}
+      {notification && (
+        <div className="fixed left-0 right-0 top-0 z-50 flex items-center justify-between px-4 py-3 shadow-lg"
+          style={{ backgroundColor: "hsl(36, 70%, 50%)", color: "hsl(0, 0%, 100%)" }}>
+          <div className="flex items-center gap-2">
+            <Bell className="h-5 w-5" />
+            <span className="text-sm font-semibold" style={{ fontFamily: FONT }}>{notification}</span>
+          </div>
+          <button onClick={() => setNotification(null)}>
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      )}
 
       {/* Content */}
       <div className="relative z-10 flex min-h-screen flex-col">
@@ -128,15 +256,15 @@ const BrainDump = () => {
             <ArrowLeft className="h-5 w-5 text-primary-foreground" />
           </button>
           <h1
-            className="text-2xl font-bold text-warm-brown"
-            style={{ fontFamily: FONT }}
+            className="text-2xl font-bold"
+            style={{ fontFamily: FONT, color: "hsl(25, 50%, 15%)" }}
           >
             Brain Dump
           </h1>
         </header>
 
         {/* Notebook */}
-        <div className="flex-1 px-4 pb-4">
+        <div className="flex-1 overflow-y-auto px-4 pb-4">
           <div
             className="mx-auto w-full max-w-lg rounded-2xl p-1 shadow-2xl"
             style={{
@@ -150,8 +278,8 @@ const BrainDump = () => {
               style={{ backgroundColor: "hsla(36, 70%, 50%, 0.15)" }}
             >
               <p
-                className="text-sm font-semibold text-warm-brown"
-                style={{ fontFamily: FONT }}
+                className="text-sm font-bold"
+                style={{ fontFamily: FONT, color: "hsl(25, 50%, 15%)" }}
               >
                 📝 My Notebook
               </p>
@@ -173,12 +301,14 @@ const BrainDump = () => {
                 value={noteText}
                 onChange={(e) => setNoteText(e.target.value)}
                 placeholder="Write what's on your mind..."
-                className="w-full resize-none border-none bg-transparent pl-4 text-base leading-8 text-foreground outline-none placeholder:text-muted-foreground"
+                className="w-full resize-none border-none bg-transparent pl-4 outline-none placeholder:text-muted-foreground/70"
                 style={{
                   fontFamily: HANDWRITING_FONT,
                   minHeight: "240px",
-                  lineHeight: "32px",
-                  color: "hsl(25, 50%, 22%)",
+                  lineHeight: "36px",
+                  fontSize: "17px",
+                  fontWeight: 600,
+                  color: "hsl(25, 55%, 12%)",
                 }}
               />
             </div>
@@ -214,7 +344,7 @@ const BrainDump = () => {
               <button
                 onClick={handleSave}
                 className="flex h-12 w-12 items-center justify-center rounded-full shadow-md transition-all hover:scale-110 active:scale-95"
-                style={{ backgroundColor: "hsla(120, 35%, 45%, 0.9)" }}
+                style={{ backgroundColor: "hsla(120, 35%, 40%, 0.95)" }}
                 title="Save & Prioritize"
               >
                 <Save className="h-5 w-5 text-primary-foreground" />
@@ -231,7 +361,50 @@ const BrainDump = () => {
             </div>
           </div>
 
-          {/* AI-Prioritized Tasks */}
+          {/* Calendar popup for detected dates */}
+          {showCalendar && pendingEvent && (
+            <div
+              className="mx-auto mt-4 w-full max-w-lg rounded-2xl p-4 shadow-xl"
+              style={{
+                backgroundColor: "hsla(40, 30%, 96%, 0.97)",
+                border: "1px solid hsla(25, 20%, 80%, 0.5)",
+              }}
+            >
+              <div className="mb-3 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <CalendarDays className="h-5 w-5" style={{ color: "hsl(36, 70%, 42%)" }} />
+                  <h2 className="text-base font-bold" style={{ fontFamily: FONT, color: "hsl(25, 50%, 12%)" }}>
+                    📅 Date Detected & Saved
+                  </h2>
+                </div>
+                <button onClick={() => setShowCalendar(false)} className="rounded-full p-1 hover:bg-secondary/50">
+                  <X className="h-4 w-4" style={{ color: "hsl(25, 50%, 30%)" }} />
+                </button>
+              </div>
+              <p className="mb-2 text-sm font-semibold" style={{ fontFamily: FONT, color: "hsl(25, 50%, 20%)" }}>
+                "{pendingEvent.title}" → {format(pendingEvent.date, "MMMM d, yyyy")}
+              </p>
+              <div className="flex justify-center">
+                <Calendar
+                  mode="single"
+                  selected={pendingEvent.date}
+                  modifiers={{ event: eventDates }}
+                  modifiersStyles={{
+                    event: { backgroundColor: "hsl(36, 70%, 50%)", color: "white", borderRadius: "50%" },
+                  }}
+                  className="pointer-events-auto rounded-xl"
+                />
+              </div>
+              <div className="mt-2 flex items-center gap-2 rounded-lg px-3 py-2" style={{ backgroundColor: "hsla(36, 70%, 50%, 0.1)" }}>
+                <Bell className="h-4 w-4" style={{ color: "hsl(36, 70%, 42%)" }} />
+                <span className="text-xs font-semibold" style={{ fontFamily: FONT, color: "hsl(25, 50%, 20%)" }}>
+                  🔔 You'll be notified on {format(addDays(pendingEvent.date, -1), "MMM d")} (1 day before)
+                </span>
+              </div>
+            </div>
+          )}
+
+          {/* AI-Prioritized Tasks with Suggested Schedule */}
           {showTasks && tasks.length > 0 && (
             <div
               className="mx-auto mt-5 w-full max-w-lg rounded-2xl p-5 shadow-xl"
@@ -240,41 +413,71 @@ const BrainDump = () => {
                 border: "1px solid hsla(25, 20%, 80%, 0.5)",
               }}
             >
-              <div className="mb-3 flex items-center gap-2">
-                <Sparkles className="h-5 w-5" style={{ color: "hsl(36, 70%, 50%)" }} />
+              <div className="mb-4 flex items-center gap-2">
+                <Sparkles className="h-5 w-5" style={{ color: "hsl(36, 70%, 42%)" }} />
                 <h2
-                  className="text-lg font-bold text-warm-brown"
-                  style={{ fontFamily: FONT }}
+                  className="text-lg font-extrabold"
+                  style={{ fontFamily: FONT, color: "hsl(25, 50%, 12%)" }}
                 >
                   AI-Prioritized Tasks
                 </h2>
               </div>
 
-              <div className="space-y-2">
+              <div className="space-y-3">
                 {tasks.map((task) => (
-                  <button
+                  <div
                     key={task.id}
-                    onClick={() => toggleTask(task.id)}
-                    className="flex w-full items-start gap-3 rounded-xl px-3 py-2 text-left transition-all hover:bg-secondary/50"
+                    className="rounded-xl px-3 py-3 transition-all"
+                    style={{
+                      backgroundColor: "hsla(40, 30%, 98%, 0.9)",
+                      border: "1px solid hsla(25, 20%, 85%, 0.4)",
+                    }}
                   >
-                    {task.done ? (
-                      <CheckSquare className="mt-0.5 h-5 w-5 shrink-0" style={{ color: "hsl(120, 35%, 45%)" }} />
-                    ) : (
-                      <Square className="mt-0.5 h-5 w-5 shrink-0 text-muted-foreground" />
-                    )}
-                    <span
-                      className={`flex-1 text-sm ${task.done ? "line-through opacity-50" : ""}`}
-                      style={{ fontFamily: FONT, color: "hsl(25, 50%, 22%)" }}
+                    <button
+                      onClick={() => toggleTask(task.id)}
+                      className="flex w-full items-start gap-3 text-left"
                     >
-                      {task.text}
-                    </span>
-                    <span
-                      className="shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold text-primary-foreground"
-                      style={{ backgroundColor: priorityColor(task.priority) }}
-                    >
-                      {priorityLabel(task.priority)}
-                    </span>
-                  </button>
+                      {task.done ? (
+                        <CheckSquare className="mt-0.5 h-5 w-5 shrink-0" style={{ color: "hsl(120, 35%, 40%)" }} />
+                      ) : (
+                        <Square className="mt-0.5 h-5 w-5 shrink-0" style={{ color: "hsl(25, 30%, 50%)" }} />
+                      )}
+                      <span
+                        className={`flex-1 text-[15px] font-semibold ${task.done ? "line-through opacity-40" : ""}`}
+                        style={{ fontFamily: FONT, color: "hsl(25, 55%, 12%)" }}
+                      >
+                        {task.text}
+                      </span>
+                      <span
+                        className="shrink-0 rounded-full px-2.5 py-0.5 text-xs font-bold"
+                        style={{ backgroundColor: priorityColor(task.priority), color: "hsl(0, 0%, 100%)" }}
+                      >
+                        {priorityLabel(task.priority)}
+                      </span>
+                    </button>
+
+                    {/* Suggested schedule row */}
+                    <div className="mt-2 flex flex-wrap items-center gap-3 pl-8">
+                      <div className="flex items-center gap-1">
+                        <Clock className="h-3.5 w-3.5" style={{ color: "hsl(36, 70%, 42%)" }} />
+                        <span className="text-xs font-semibold" style={{ fontFamily: FONT, color: "hsl(25, 50%, 25%)" }}>
+                          {task.suggestedTime}
+                        </span>
+                      </div>
+                      <span className="text-xs font-medium" style={{ color: "hsl(25, 30%, 40%)" }}>•</span>
+                      <span className="text-xs font-semibold" style={{ fontFamily: FONT, color: "hsl(25, 50%, 25%)" }}>
+                        ⏱ {task.estimatedDuration}
+                      </span>
+                      {task.detectedDate && (
+                        <>
+                          <span className="text-xs font-medium" style={{ color: "hsl(25, 30%, 40%)" }}>•</span>
+                          <span className="text-xs font-semibold" style={{ fontFamily: FONT, color: "hsl(0, 60%, 40%)" }}>
+                            📅 {format(task.detectedDate, "MMM d")}
+                          </span>
+                        </>
+                      )}
+                    </div>
+                  </div>
                 ))}
               </div>
             </div>
@@ -289,8 +492,8 @@ const BrainDump = () => {
             }}
           >
             <h2
-              className="mb-3 text-lg font-bold text-warm-brown"
-              style={{ fontFamily: FONT }}
+              className="mb-3 text-lg font-extrabold"
+              style={{ fontFamily: FONT, color: "hsl(25, 50%, 12%)" }}
             >
               Previous Thoughts
             </h2>
@@ -305,12 +508,12 @@ const BrainDump = () => {
                   }}
                 >
                   <p
-                    className="text-sm"
-                    style={{ fontFamily: HANDWRITING_FONT, color: "hsl(25, 50%, 22%)" }}
+                    className="text-[15px] font-semibold"
+                    style={{ fontFamily: HANDWRITING_FONT, color: "hsl(25, 55%, 12%)" }}
                   >
                     {entry.text}
                   </p>
-                  <p className="mt-1 text-xs text-muted-foreground" style={{ fontFamily: FONT }}>
+                  <p className="mt-1 text-xs font-semibold" style={{ fontFamily: FONT, color: "hsl(25, 30%, 40%)" }}>
                     {entry.date}
                   </p>
                 </div>
