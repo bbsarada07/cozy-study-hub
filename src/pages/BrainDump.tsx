@@ -188,7 +188,7 @@ const BrainDump = () => {
     }
   };
 
-  // Removed old toggleTask, priorityColor, priorityLabel — now in TaskBoard
+  const eventDates = savedEvents.map((e) => e.date);
 
   const linedBg = `repeating-linear-gradient(
     transparent,
