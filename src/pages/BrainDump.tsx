@@ -161,7 +161,7 @@ const BrainDump = () => {
     prioritized.sort((a, b) => order[a.priority] - order[b.priority]);
 
     setTasks(prioritized);
-    setShowTasks(true);
+    // showTasks is derived from tasks.length > 0
 
     // Handle detected dates - show calendar
     if (detectedEvents.length > 0) {
