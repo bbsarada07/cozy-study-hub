@@ -53,7 +53,9 @@ const featureItems = [
 
 const Library = () => {
   const navigate = useNavigate();
-  const [showCongrats, setShowCongrats] = useState(true);
+  const [showCongrats, setShowCongrats] = useState(() => {
+    return !localStorage.getItem("congrats_shown");
+  });
   const [profileOpen, setProfileOpen] = useState(false);
 
   return (
@@ -192,7 +194,7 @@ const Library = () => {
             }}
           >
             <button
-              onClick={() => setShowCongrats(false)}
+              onClick={() => { localStorage.setItem("congrats_shown", "true"); setShowCongrats(false); }}
               className="absolute right-4 top-4 text-muted-foreground transition-colors hover:text-foreground"
             >
               <X className="h-5 w-5" />
@@ -221,7 +223,7 @@ const Library = () => {
             </p>
 
             <button
-              onClick={() => setShowCongrats(false)}
+              onClick={() => { localStorage.setItem("congrats_shown", "true"); setShowCongrats(false); }}
               className="w-full rounded-full bg-primary px-8 py-3 text-lg font-semibold text-primary-foreground shadow-lg transition-all hover:scale-[1.02] hover:shadow-xl active:scale-95"
             >
               OK, Let's Go!
