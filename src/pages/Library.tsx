@@ -194,7 +194,7 @@ const Library = () => {
             }}
           >
             <button
-              onClick={() => setShowCongrats(false)}
+              onClick={() => { localStorage.setItem("congrats_shown", "true"); setShowCongrats(false); }}
               className="absolute right-4 top-4 text-muted-foreground transition-colors hover:text-foreground"
             >
               <X className="h-5 w-5" />
