@@ -152,6 +152,7 @@ const Library = () => {
                 key={item.id}
                 onClick={() => {
                   if (item.id === "braindump") navigate("/braindump");
+                  if (item.id === "ai-assistant") navigate("/ask-librarian");
                 }}
                 className="group flex flex-col items-center gap-2 rounded-2xl p-3 transition-all duration-200 hover:scale-105 hover:shadow-xl active:scale-95"
                 style={{

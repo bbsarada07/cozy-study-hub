@@ -7,6 +7,7 @@ import Index from "./pages/Index.tsx";
 import Profile from "./pages/Profile.tsx";
 import Library from "./pages/Library.tsx";
 import BrainDump from "./pages/BrainDump.tsx";
+import AskLibrarian from "./pages/AskLibrarian.tsx";
 import NotFound from "./pages/NotFound.tsx";
 
 const queryClient = new QueryClient();
@@ -22,6 +23,7 @@ const App = () => (
           <Route path="/profile" element={<Profile />} />
           <Route path="/library" element={<Library />} />
           <Route path="/braindump" element={<BrainDump />} />
+          <Route path="/ask-librarian" element={<AskLibrarian />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>
