@@ -7,6 +7,7 @@ import Index from "./pages/Index.tsx";
 import Profile from "./pages/Profile.tsx";
 import Library from "./pages/Library.tsx";
 import BrainDump from "./pages/BrainDump.tsx";
+import AskLibrarian from "./pages/AskLibrarian.tsx";
 import NotFound from "./pages/NotFound.tsx";
 
 const queryClient = new QueryClient();
