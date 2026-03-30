@@ -223,7 +223,7 @@ const Library = () => {
             </p>
 
             <button
-              onClick={() => setShowCongrats(false)}
+              onClick={() => { localStorage.setItem("congrats_shown", "true"); setShowCongrats(false); }}
               className="w-full rounded-full bg-primary px-8 py-3 text-lg font-semibold text-primary-foreground shadow-lg transition-all hover:scale-[1.02] hover:shadow-xl active:scale-95"
             >
               OK, Let's Go!
