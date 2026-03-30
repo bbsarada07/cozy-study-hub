@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Send, Mic, BookOpen } from "lucide-react";
-import { ScrollArea } from "@/components/ui/scroll-area";
+import { ArrowLeft, Send, Mic } from "lucide-react";
+import { toast } from "sonner";
 
 import libraryBg from "@/assets/library-room.png";
 import librarianAvatar from "@/assets/avatars/librarian-avatar.png";
@@ -22,29 +22,96 @@ const QUICK_ACTIONS = [
   { label: "🧠 Create Quiz", prompt: "Create a quiz to test my understanding." },
 ];
 
-const SIMULATED_RESPONSES: Record<string, string> = {
-  default:
-    "That's a great question! Let me help you with that. Could you provide a bit more detail so I can give you the best guidance?",
-  study:
-    "I'd love to help you create a study plan! Here's what I suggest:\n\n📅 **Step 1:** List all your subjects and upcoming deadlines.\n📊 **Step 2:** Prioritize by difficulty and exam date.\n⏰ **Step 3:** Allocate 25-minute focused study blocks (Pomodoro technique).\n🔄 **Step 4:** Include review sessions every 2-3 days.\n\nWould you like me to create a detailed schedule for specific subjects?",
-  explain:
-    "I'd be happy to explain! Just tell me the topic or concept you're struggling with, and I'll break it down into simple, easy-to-understand parts. I can use analogies and examples to make it clearer. 📚",
-  summarize:
-    "Sure! Paste your notes here and I'll create a concise summary with:\n\n• **Key points** highlighted\n• **Important terms** defined\n• **Connections** between ideas mapped out\n\nReady when you are! ✍️",
-  quiz: "Let's test your knowledge! Tell me the subject and topic, and I'll create a quiz with:\n\n1️⃣ Multiple choice questions\n2️⃣ True/False statements\n3️⃣ Short answer questions\n\nWhat subject should we start with?",
-};
+const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ask-librarian`;
 
-function getSimulatedResponse(input: string): string {
-  const lower = input.toLowerCase();
-  if (lower.includes("study plan") || lower.includes("schedule"))
-    return SIMULATED_RESPONSES.study;
-  if (lower.includes("explain") || lower.includes("concept"))
-    return SIMULATED_RESPONSES.explain;
-  if (lower.includes("summarize") || lower.includes("notes"))
-    return SIMULATED_RESPONSES.summarize;
-  if (lower.includes("quiz") || lower.includes("test"))
-    return SIMULATED_RESPONSES.quiz;
-  return SIMULATED_RESPONSES.default;
+type Msg = { role: "user" | "assistant"; content: string };
+
+async function streamChat({
+  messages,
+  onDelta,
+  onDone,
+  onError,
+}: {
+  messages: Msg[];
+  onDelta: (deltaText: string) => void;
+  onDone: () => void;
+  onError: (error: string) => void;
+}) {
+  const resp = await fetch(CHAT_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+    },
+    body: JSON.stringify({ messages }),
+  });
+
+  if (!resp.ok) {
+    const data = await resp.json().catch(() => ({}));
+    const errorMsg = data.error || `Error ${resp.status}`;
+    onError(errorMsg);
+    return;
+  }
+
+  if (!resp.body) {
+    onError("No response stream");
+    return;
+  }
+
+  const reader = resp.body.getReader();
+  const decoder = new TextDecoder();
+  let textBuffer = "";
+  let streamDone = false;
+
+  while (!streamDone) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    textBuffer += decoder.decode(value, { stream: true });
+
+    let newlineIndex: number;
+    while ((newlineIndex = textBuffer.indexOf("\n")) !== -1) {
+      let line = textBuffer.slice(0, newlineIndex);
+      textBuffer = textBuffer.slice(newlineIndex + 1);
+
+      if (line.endsWith("\r")) line = line.slice(0, -1);
+      if (line.startsWith(":") || line.trim() === "") continue;
+      if (!line.startsWith("data: ")) continue;
+
+      const jsonStr = line.slice(6).trim();
+      if (jsonStr === "[DONE]") {
+        streamDone = true;
+        break;
+      }
+
+      try {
+        const parsed = JSON.parse(jsonStr);
+        const content = parsed.choices?.[0]?.delta?.content as string | undefined;
+        if (content) onDelta(content);
+      } catch {
+        textBuffer = line + "\n" + textBuffer;
+        break;
+      }
+    }
+  }
+
+  // Flush remaining buffer
+  if (textBuffer.trim()) {
+    for (let raw of textBuffer.split("\n")) {
+      if (!raw) continue;
+      if (raw.endsWith("\r")) raw = raw.slice(0, -1);
+      if (raw.startsWith(":") || raw.trim() === "") continue;
+      if (!raw.startsWith("data: ")) continue;
+      const jsonStr = raw.slice(6).trim();
+      if (jsonStr === "[DONE]") continue;
+      try {
+        const parsed = JSON.parse(jsonStr);
+        const content = parsed.choices?.[0]?.delta?.content as string | undefined;
+        if (content) onDelta(content);
+      } catch { /* ignore */ }
+    }
+  }
+
+  onDone();
 }
 
 const AskLibrarian = () => {
@@ -62,7 +129,7 @@ const AskLibrarian = () => {
   }, [messages, isTyping]);
 
   const sendMessage = async (text: string) => {
-    if (!text.trim()) return;
+    if (!text.trim() || isTyping) return;
 
     const userMsg: ChatMessage = {
       id: crypto.randomUUID(),
@@ -71,22 +138,49 @@ const AskLibrarian = () => {
       timestamp: new Date(),
     };
 
-    setMessages((prev) => [...prev, userMsg]);
+    const newMessages = [...messages, userMsg];
+    setMessages(newMessages);
     setInput("");
     setIsTyping(true);
 
-    // Simulate AI thinking delay
-    await new Promise((r) => setTimeout(r, 1200 + Math.random() * 800));
+    let assistantSoFar = "";
 
-    const aiMsg: ChatMessage = {
-      id: crypto.randomUUID(),
-      role: "assistant",
-      content: getSimulatedResponse(text),
-      timestamp: new Date(),
+    const upsertAssistant = (chunk: string) => {
+      assistantSoFar += chunk;
+      setMessages((prev) => {
+        const last = prev[prev.length - 1];
+        if (last?.role === "assistant") {
+          return prev.map((m, i) =>
+            i === prev.length - 1 ? { ...m, content: assistantSoFar } : m
+          );
+        }
+        return [
+          ...prev,
+          {
+            id: crypto.randomUUID(),
+            role: "assistant" as const,
+            content: assistantSoFar,
+            timestamp: new Date(),
+          },
+        ];
+      });
     };
 
-    setIsTyping(false);
-    setMessages((prev) => [...prev, aiMsg]);
+    try {
+      await streamChat({
+        messages: newMessages.map((m) => ({ role: m.role, content: m.content })),
+        onDelta: (chunk) => upsertAssistant(chunk),
+        onDone: () => setIsTyping(false),
+        onError: (error) => {
+          setIsTyping(false);
+          toast.error(error);
+        },
+      });
+    } catch (e) {
+      console.error(e);
+      setIsTyping(false);
+      toast.error("Failed to connect to the librarian. Please try again.");
+    }
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -139,7 +233,7 @@ const AskLibrarian = () => {
             Ask Librarian 📚
           </h1>
           <p className="text-xs text-primary-foreground/70">
-            Your study companion
+            AI-powered study companion
           </p>
         </div>
       </header>
@@ -238,7 +332,7 @@ const AskLibrarian = () => {
           ))}
 
           {/* Typing indicator */}
-          {isTyping && (
+          {isTyping && !messages.some(m => m.role === "assistant" && messages.indexOf(m) === messages.length - 1) && (
             <div className="flex items-start gap-2 animate-in fade-in duration-300">
               <img
                 src={librarianAvatar}
