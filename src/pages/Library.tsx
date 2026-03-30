@@ -53,7 +53,9 @@ const featureItems = [
 
 const Library = () => {
   const navigate = useNavigate();
-  const [showCongrats, setShowCongrats] = useState(true);
+  const [showCongrats, setShowCongrats] = useState(() => {
+    return !localStorage.getItem("congrats_shown");
+  });
   const [profileOpen, setProfileOpen] = useState(false);
 
   return (
