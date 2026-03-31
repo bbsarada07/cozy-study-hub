@@ -11,6 +11,10 @@ import BrainDump from "./pages/BrainDump.tsx";
 import AskLibrarian from "./pages/AskLibrarian.tsx";
 import FocusPage from "./pages/FocusPage.tsx";
 import BreakPage from "./pages/BreakPage.tsx";
+import AuthPage from "./pages/AuthPage.tsx";
+import GroupStudy from "./pages/GroupStudy.tsx";
+import StudyRoom from "./pages/StudyRoom.tsx";
+import JoinRoom from "./pages/JoinRoom.tsx";
 import NotFound from "./pages/NotFound.tsx";
 
 const queryClient = new QueryClient();
