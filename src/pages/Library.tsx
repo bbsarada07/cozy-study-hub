@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { User, Trophy, X, Star } from "lucide-react";
+import { usePomodoroContext } from "@/contexts/PomodoroContext";
 
 import libraryBg from "@/assets/library-room.png";
 import bookshelfImg from "@/assets/features/bookshelf.png";
@@ -53,6 +54,7 @@ const featureItems = [
 
 const Library = () => {
   const navigate = useNavigate();
+  const { startFocus } = usePomodoroContext();
   const [showCongrats, setShowCongrats] = useState(() => {
     return !localStorage.getItem("congrats_shown");
   });
@@ -153,6 +155,7 @@ const Library = () => {
                 onClick={() => {
                   if (item.id === "braindump") navigate("/braindump");
                   if (item.id === "ai-assistant") navigate("/ask-librarian");
+                  if (item.id === "study-desk") { startFocus(); navigate("/focus"); }
                 }}
                 className="group flex flex-col items-center gap-2 rounded-2xl p-3 transition-all duration-200 hover:scale-105 hover:shadow-xl active:scale-95"
                 style={{
