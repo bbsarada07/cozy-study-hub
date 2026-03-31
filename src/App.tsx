@@ -11,6 +11,10 @@ import BrainDump from "./pages/BrainDump.tsx";
 import AskLibrarian from "./pages/AskLibrarian.tsx";
 import FocusPage from "./pages/FocusPage.tsx";
 import BreakPage from "./pages/BreakPage.tsx";
+import AuthPage from "./pages/AuthPage.tsx";
+import GroupStudy from "./pages/GroupStudy.tsx";
+import StudyRoom from "./pages/StudyRoom.tsx";
+import JoinRoom from "./pages/JoinRoom.tsx";
 import NotFound from "./pages/NotFound.tsx";
 
 const queryClient = new QueryClient();
@@ -30,6 +34,10 @@ const App = () => (
             <Route path="/ask-librarian" element={<AskLibrarian />} />
             <Route path="/focus" element={<FocusPage />} />
             <Route path="/break" element={<BreakPage />} />
+            <Route path="/auth" element={<AuthPage />} />
+            <Route path="/group-study" element={<GroupStudy />} />
+            <Route path="/room/:roomId" element={<StudyRoom />} />
+            <Route path="/join" element={<JoinRoom />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>
