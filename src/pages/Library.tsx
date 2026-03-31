@@ -53,6 +53,7 @@ const featureItems = [
 
 const Library = () => {
   const navigate = useNavigate();
+  const { startFocus } = usePomodoroContext();
   const [showCongrats, setShowCongrats] = useState(() => {
     return !localStorage.getItem("congrats_shown");
   });
