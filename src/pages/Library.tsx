@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { User, Trophy, X, Star } from "lucide-react";
+import { usePomodoroContext } from "@/contexts/PomodoroContext";
 
 import libraryBg from "@/assets/library-room.png";
 import bookshelfImg from "@/assets/features/bookshelf.png";
