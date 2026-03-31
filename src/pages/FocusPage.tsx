@@ -1,14 +1,9 @@
 import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, Pause, Play, X } from "lucide-react";
-import { usePomodoro } from "@/hooks/usePomodoro";
+import { usePomodoroContext } from "@/contexts/PomodoroContext";
 
 const FONT = "'Times New Roman', Times, serif";
-
-// Shared context: we store the hook at module level so it persists across navigations
-// Instead we'll use a context provider — see PomodoroContext
-
-import { usePomodoroContext } from "@/contexts/PomodoroContext";
 
 const FocusPage = () => {
   const navigate = useNavigate();
