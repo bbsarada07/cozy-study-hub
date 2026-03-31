@@ -34,6 +34,10 @@ const App = () => (
             <Route path="/ask-librarian" element={<AskLibrarian />} />
             <Route path="/focus" element={<FocusPage />} />
             <Route path="/break" element={<BreakPage />} />
+            <Route path="/auth" element={<AuthPage />} />
+            <Route path="/group-study" element={<GroupStudy />} />
+            <Route path="/room/:roomId" element={<StudyRoom />} />
+            <Route path="/join" element={<JoinRoom />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>
