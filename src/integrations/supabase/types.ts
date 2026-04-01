@@ -113,22 +113,28 @@ export type Database = {
       }
       room_members: {
         Row: {
+          hand_raised: boolean
           id: string
           is_active: boolean
+          is_typing: boolean
           joined_at: string
           room_id: string
           user_id: string
         }
         Insert: {
+          hand_raised?: boolean
           id?: string
           is_active?: boolean
+          is_typing?: boolean
           joined_at?: string
           room_id: string
           user_id: string
         }
         Update: {
+          hand_raised?: boolean
           id?: string
           is_active?: boolean
+          is_typing?: boolean
           joined_at?: string
           room_id?: string
           user_id?: string
@@ -202,6 +208,41 @@ export type Database = {
             foreignKeyName: "room_questions_room_id_fkey"
             columns: ["room_id"]
             isOneToOne: false
+            referencedRelation: "study_rooms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      room_timer: {
+        Row: {
+          end_time: string | null
+          id: string
+          phase: string
+          room_id: string
+          started_by: string | null
+          updated_at: string
+        }
+        Insert: {
+          end_time?: string | null
+          id?: string
+          phase?: string
+          room_id: string
+          started_by?: string | null
+          updated_at?: string
+        }
+        Update: {
+          end_time?: string | null
+          id?: string
+          phase?: string
+          room_id?: string
+          started_by?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "room_timer_room_id_fkey"
+            columns: ["room_id"]
+            isOneToOne: true
             referencedRelation: "study_rooms"
             referencedColumns: ["id"]
           },

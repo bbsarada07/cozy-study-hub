@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Bot, CheckCircle, XCircle, Sparkles } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import type { User } from "@supabase/supabase-js";
 
@@ -12,16 +13,17 @@ interface Props {
 
 type QuizQuestion = {
   question: string;
-  type: "mcq" | "short";
+  type: "mcq" | "one_word" | "short" | "long";
   options?: string[];
   answer: string;
+  subject?: string;
 };
 
 const EXAM_TYPES = [
-  { id: "neet", label: "NEET (Medical)" },
-  { id: "jee", label: "JEE (Engineering)" },
-  { id: "school", label: "School Exam" },
-  { id: "custom", label: "Custom" },
+  { id: "neet", label: "NEET (Medical)", subjects: "Biology, Physics, Chemistry" },
+  { id: "jee", label: "JEE (Engineering)", subjects: "Physics, Chemistry, Maths" },
+  { id: "school", label: "School Exam", subjects: "" },
+  { id: "custom", label: "Custom", subjects: "" },
 ];
 
 const RoomQuiz = ({ roomId, user }: Props) => {
@@ -33,41 +35,78 @@ const RoomQuiz = ({ roomId, user }: Props) => {
   const [selectedAnswer, setSelectedAnswer] = useState<string | null>(null);
   const [showResult, setShowResult] = useState(false);
   const [score, setScore] = useState(0);
+  const [shortInput, setShortInput] = useState("");
+
+  const getQuizPrompt = (topicText: string, exam: string) => {
+    const examInfo = EXAM_TYPES.find(e => e.id === exam);
+    const subjectLine = examInfo?.subjects ? `Cover these subjects: ${examInfo.subjects}.` : "";
+
+    if (exam === "jee" || exam === "neet") {
+      return `You are an expert exam paper setter for ${examInfo?.label || exam}.
+Create a realistic mock test based on this topic/content: "${topicText}"
+
+${subjectLine}
+
+Generate exactly 10 questions with this distribution:
+- 5 MCQ questions (4 options each, only one correct)
+- 2 one-word answer questions  
+- 2 short answer questions (1-2 sentence answers)
+- 1 long answer question (detailed answer)
+
+CRITICAL RULES:
+- Questions MUST be about the specific content/topic provided
+- Questions should be at ${examInfo?.label} difficulty level
+- Each question must include a "subject" field (e.g., "Physics", "Chemistry", etc.)
+- DO NOT generate generic questions about what ${examInfo?.label} is
+- Generate actual exam-style questions testing knowledge of the topic
+
+Return ONLY a JSON array. Each object must have:
+- "question": string
+- "type": "mcq" | "one_word" | "short" | "long"
+- "options": string[] (only for mcq, exactly 4 options)
+- "answer": string (correct answer)
+- "subject": string
+
+Return ONLY the raw JSON array, no markdown, no explanation.`;
+    }
+
+    return `You are a quiz generator for students.
+Create a quiz based on this topic/content: "${topicText}"
+
+Generate exactly 8 questions with this distribution:
+- 4 MCQ questions (4 options each, only one correct)
+- 2 one-word answer questions
+- 1 short answer question
+- 1 long answer question
+
+CRITICAL: Questions must test actual knowledge of the provided topic/content. Do NOT ask generic or meta questions.
+
+Return ONLY a JSON array. Each object must have:
+- "question": string
+- "type": "mcq" | "one_word" | "short" | "long"
+- "options": string[] (only for mcq, exactly 4 options)
+- "answer": string (correct answer)
+
+Return ONLY the raw JSON array, no markdown, no explanation.`;
+  };
 
   const generateQuiz = async () => {
     if (!topic.trim()) return;
     setGenerating(true);
     try {
-      const prompt = `Generate a quiz of exactly 5 questions about "${topic.trim()}" for ${examType} level. 
-Return a JSON array of objects with fields: question (string), type ("mcq" or "short"), options (array of 4 strings for mcq, omit for short), answer (correct answer string).
-ONLY return the JSON array, nothing else.`;
+      const prompt = getQuizPrompt(topic.trim(), examType);
 
-      const resp = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ask-librarian`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-          },
-          body: JSON.stringify({
-            messages: [{ role: "user", content: prompt }],
-          }),
-        }
-      );
+      const { data, error } = await supabase.functions.invoke("ask-librarian", {
+        body: { messages: [{ role: "user", content: prompt }] },
+      });
 
-      if (!resp.ok) throw new Error("Failed to generate quiz");
+      if (error) throw error;
 
-      // Read full streamed response
-      const reader = resp.body!.getReader();
-      const decoder = new TextDecoder();
+      // Handle streaming response - the edge function returns SSE
       let fullText = "";
-
-      while (true) {
-        const { value, done } = await reader.read();
-        if (done) break;
-        const chunk = decoder.decode(value, { stream: true });
-        for (const line of chunk.split("\n")) {
+      if (typeof data === "string") {
+        // Parse SSE text
+        for (const line of data.split("\n")) {
           if (!line.startsWith("data: ")) continue;
           const json = line.slice(6).trim();
           if (json === "[DONE]") continue;
@@ -77,9 +116,50 @@ ONLY return the JSON array, nothing else.`;
             if (content) fullText += content;
           } catch {}
         }
+      } else if (data?.choices) {
+        fullText = data.choices[0]?.message?.content || "";
+      } else {
+        // Try reading as stream via fetch instead
+        const resp = await fetch(
+          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ask-librarian`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+            },
+            body: JSON.stringify({ messages: [{ role: "user", content: prompt }] }),
+          }
+        );
+        if (!resp.ok) throw new Error("Failed to generate quiz");
+
+        const reader = resp.body!.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          let newlineIdx: number;
+          while ((newlineIdx = buffer.indexOf("\n")) !== -1) {
+            const line = buffer.slice(0, newlineIdx).trim();
+            buffer = buffer.slice(newlineIdx + 1);
+            if (!line.startsWith("data: ")) continue;
+            const jsonStr = line.slice(6).trim();
+            if (jsonStr === "[DONE]") continue;
+            try {
+              const parsed = JSON.parse(jsonStr);
+              const content = parsed.choices?.[0]?.delta?.content;
+              if (content) fullText += content;
+            } catch {}
+          }
+        }
       }
 
-      // Extract JSON from response
+      if (!fullText) throw new Error("Empty AI response");
+
+      // Extract JSON array from response
       const jsonMatch = fullText.match(/\[[\s\S]*\]/);
       if (!jsonMatch) throw new Error("Invalid quiz format");
 
@@ -88,8 +168,10 @@ ONLY return the JSON array, nothing else.`;
       setCurrentQ(0);
       setScore(0);
       setSelectedAnswer(null);
+      setShortInput("");
       setShowResult(false);
     } catch (err: any) {
+      console.error("Quiz generation error:", err);
       toast.error("Failed to generate quiz. Try again.");
     } finally {
       setGenerating(false);
@@ -99,18 +181,21 @@ ONLY return the JSON array, nothing else.`;
   const checkAnswer = (answer: string) => {
     setSelectedAnswer(answer);
     setShowResult(true);
-    if (answer.toLowerCase().trim() === quiz[currentQ].answer.toLowerCase().trim()) {
+    const correct = quiz[currentQ].answer.toLowerCase().trim();
+    if (answer.toLowerCase().trim() === correct) {
       setScore((s) => s + 1);
     }
   };
 
   const nextQuestion = () => {
     setSelectedAnswer(null);
+    setShortInput("");
     setShowResult(false);
     setCurrentQ((c) => c + 1);
   };
 
   const isFinished = currentQ >= quiz.length && quiz.length > 0;
+  const currentQuestion = quiz[currentQ];
 
   return (
     <div className="flex h-full flex-col overflow-y-auto px-4 py-4" style={{ fontFamily: FONT }}>
@@ -119,14 +204,15 @@ ONLY return the JSON array, nothing else.`;
           <Sparkles className="h-12 w-12 text-primary" />
           <h2 className="text-lg font-bold text-warm-brown">AI Quiz Generator</h2>
           <p className="text-center text-sm text-muted-foreground">
-            Enter a topic and select exam type to generate a quiz
+            Enter a topic or paste study material to generate exam-style questions
           </p>
 
-          <input
+          <textarea
             value={topic}
             onChange={(e) => setTopic(e.target.value)}
-            placeholder="e.g., Photosynthesis, Newton's Laws"
-            className="w-full max-w-sm rounded-xl border border-input bg-background px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-primary/30"
+            placeholder="Paste your study notes, a topic like 'Photosynthesis', or chapter content here..."
+            rows={4}
+            className="w-full max-w-sm rounded-xl border border-input bg-background px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-primary/30 resize-none"
           />
 
           <div className="flex flex-wrap justify-center gap-2">
@@ -151,7 +237,7 @@ ONLY return the JSON array, nothing else.`;
             className="mt-2 flex items-center gap-2 rounded-xl bg-primary px-8 py-3 font-semibold text-primary-foreground shadow-lg transition-all hover:scale-[1.02] active:scale-95 disabled:opacity-50"
           >
             <Bot className="h-5 w-5" />
-            {generating ? "Generating…" : "Generate Quiz"}
+            {generating ? "Generating Quiz…" : "Generate Quiz"}
           </button>
         </div>
       ) : isFinished ? (
@@ -175,18 +261,29 @@ ONLY return the JSON array, nothing else.`;
           <div className="flex items-center justify-between">
             <span className="text-sm font-semibold text-muted-foreground">
               Question {currentQ + 1}/{quiz.length}
+              {currentQuestion?.subject && ` · ${currentQuestion.subject}`}
             </span>
             <span className="text-sm font-bold text-primary">Score: {score}</span>
           </div>
 
           <div className="rounded-xl border border-secondary bg-card p-5 shadow-sm">
-            <p className="text-base font-semibold text-warm-brown">{quiz[currentQ].question}</p>
+            <div className="mb-1 flex items-center gap-2">
+              <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase ${
+                currentQuestion?.type === "mcq" ? "bg-primary/10 text-primary" :
+                currentQuestion?.type === "one_word" ? "bg-accent/20 text-accent-foreground" :
+                currentQuestion?.type === "short" ? "bg-secondary text-muted-foreground" :
+                "bg-destructive/10 text-destructive"
+              }`}>
+                {currentQuestion?.type === "one_word" ? "One Word" : currentQuestion?.type?.toUpperCase()}
+              </span>
+            </div>
+            <p className="text-base font-semibold text-warm-brown">{currentQuestion?.question}</p>
           </div>
 
-          {quiz[currentQ].type === "mcq" && quiz[currentQ].options ? (
+          {currentQuestion?.type === "mcq" && currentQuestion.options ? (
             <div className="flex flex-col gap-2">
-              {quiz[currentQ].options!.map((opt, i) => {
-                const isCorrect = opt.toLowerCase().trim() === quiz[currentQ].answer.toLowerCase().trim();
+              {currentQuestion.options.map((opt, i) => {
+                const isCorrect = opt.toLowerCase().trim() === currentQuestion.answer.toLowerCase().trim();
                 const isSelected = selectedAnswer === opt;
                 return (
                   <button
@@ -203,49 +300,58 @@ ONLY return the JSON array, nothing else.`;
                         : "border-secondary bg-card text-warm-brown hover:border-primary hover:bg-primary/5"
                     }`}
                   >
-                    {showResult && isCorrect && <CheckCircle className="h-5 w-5 text-green-600" />}
-                    {showResult && isSelected && !isCorrect && <XCircle className="h-5 w-5 text-destructive" />}
+                    {showResult && isCorrect && <CheckCircle className="h-5 w-5 shrink-0 text-green-600" />}
+                    {showResult && isSelected && !isCorrect && <XCircle className="h-5 w-5 shrink-0 text-destructive" />}
                     {opt}
                   </button>
                 );
               })}
             </div>
           ) : (
-            <div className="flex gap-2">
-              <input
-                value={selectedAnswer || ""}
-                onChange={(e) => !showResult && setSelectedAnswer(e.target.value)}
-                placeholder="Type your answer…"
-                disabled={showResult}
-                className="flex-1 rounded-xl border border-input bg-background px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-primary/30"
-                onKeyDown={(e) => e.key === "Enter" && selectedAnswer && !showResult && checkAnswer(selectedAnswer)}
-              />
+            <div className="flex flex-col gap-2">
+              {currentQuestion?.type === "long" ? (
+                <textarea
+                  value={shortInput}
+                  onChange={(e) => !showResult && setShortInput(e.target.value)}
+                  placeholder="Type your detailed answer…"
+                  rows={4}
+                  disabled={showResult}
+                  className="rounded-xl border border-input bg-background px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-primary/30 resize-none"
+                />
+              ) : (
+                <input
+                  value={shortInput}
+                  onChange={(e) => !showResult && setShortInput(e.target.value)}
+                  placeholder={currentQuestion?.type === "one_word" ? "One word answer…" : "Type your answer…"}
+                  disabled={showResult}
+                  className="rounded-xl border border-input bg-background px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-primary/30"
+                  onKeyDown={(e) => e.key === "Enter" && shortInput && !showResult && checkAnswer(shortInput)}
+                />
+              )}
               {!showResult && (
                 <button
-                  onClick={() => selectedAnswer && checkAnswer(selectedAnswer)}
-                  disabled={!selectedAnswer}
+                  onClick={() => shortInput && checkAnswer(shortInput)}
+                  disabled={!shortInput}
                   className="rounded-xl bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground disabled:opacity-50"
                 >
-                  Check
+                  Check Answer
                 </button>
+              )}
+              {showResult && (
+                <div className="rounded-xl border border-secondary bg-secondary/50 p-3 text-sm">
+                  <p className="font-semibold text-muted-foreground">Correct answer:</p>
+                  <p className="text-warm-brown">{currentQuestion?.answer}</p>
+                </div>
               )}
             </div>
           )}
 
-          {showResult && currentQ < quiz.length - 1 && (
+          {showResult && (
             <button
               onClick={nextQuestion}
               className="rounded-xl bg-primary py-3 font-semibold text-primary-foreground shadow-lg"
             >
-              Next Question →
-            </button>
-          )}
-          {showResult && currentQ === quiz.length - 1 && (
-            <button
-              onClick={nextQuestion}
-              className="rounded-xl bg-primary py-3 font-semibold text-primary-foreground shadow-lg"
-            >
-              See Results
+              {currentQ === quiz.length - 1 ? "See Results" : "Next Question →"}
             </button>
           )}
         </div>
