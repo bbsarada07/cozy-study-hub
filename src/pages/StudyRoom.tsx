@@ -8,6 +8,7 @@ import RoomChat from "@/components/room/RoomChat";
 import RoomFiles from "@/components/room/RoomFiles";
 import RoomQA from "@/components/room/RoomQA";
 import RoomQuiz from "@/components/room/RoomQuiz";
+import RoomTimer from "@/components/room/RoomTimer";
 
 const FONT = "'Times New Roman', Times, serif";
 
@@ -57,7 +58,6 @@ const StudyRoom = () => {
 
     fetchRoom();
 
-    // Realtime member updates
     const channel = supabase
       .channel(`room-members-${roomId}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "room_members", filter: `room_id=eq.${roomId}` }, () => {
@@ -94,6 +94,8 @@ const StudyRoom = () => {
     );
   }
 
+  const activeMembers = members.filter((m: any) => m.is_active);
+
   return (
     <div className="flex h-screen flex-col bg-background" style={{ fontFamily: FONT }}>
       {/* Header */}
@@ -111,16 +113,21 @@ const StudyRoom = () => {
               Code: <span className="font-mono font-bold uppercase">{room?.code}</span>
               <Copy className="h-3 w-3" />
             </button>
+            <span className="text-xs text-muted-foreground">
+              · {activeMembers.length} active
+            </span>
           </div>
         </div>
 
         {/* Member avatars */}
         <div className="flex items-center gap-1">
           <div className="flex -space-x-2">
-            {members.slice(0, 4).map((m, i) => (
+            {members.slice(0, 4).map((m) => (
               <div
                 key={m.id}
-                className="flex h-8 w-8 items-center justify-center rounded-full border-2 border-background bg-primary/20 text-xs font-bold text-warm-brown"
+                className={`flex h-8 w-8 items-center justify-center rounded-full border-2 border-background text-xs font-bold ${
+                  m.is_active ? "bg-primary/20 text-warm-brown" : "bg-secondary text-muted-foreground"
+                }`}
                 title={m.profiles?.username}
               >
                 {(m.profiles?.username || "?")[0].toUpperCase()}
@@ -137,6 +144,11 @@ const StudyRoom = () => {
           </button>
         </div>
       </header>
+
+      {/* Shared Timer */}
+      <div className="border-b border-secondary px-4 py-2">
+        <RoomTimer roomId={roomId!} user={user} />
+      </div>
 
       {/* Tabs */}
       <div className="flex border-b border-secondary px-2">
