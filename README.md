@@ -41,3 +41,32 @@ GEMINI_API_KEY
 
 Run the development server:
 npm run dev
+
+### 2. The .gitignore
+Crucial for security. **Never** upload your API keys. Create a file named `.gitignore` in your root folder:
+
+```text
+# Dependencies
+node_modules
+.pnp
+.pnp.js
+
+# Env Files (Sensitive Info)
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Build
+.next/
+out/
+build/
+
+# IDEs
+.vscode/
+.idea/
+.DS_Store
+```
+
+##MIT License
