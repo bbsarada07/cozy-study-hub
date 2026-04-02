@@ -1,34 +1,43 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, Share2, Copy, Users } from "lucide-react";
+import { ArrowLeft, Share2, Copy } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { usePoints } from "@/hooks/usePoints";
+import { useUnlocks, STORE_ITEMS } from "@/hooks/useUnlocks";
 import { toast } from "sonner";
 import RoomChat from "@/components/room/RoomChat";
 import RoomFiles from "@/components/room/RoomFiles";
 import RoomQA from "@/components/room/RoomQA";
 import RoomQuiz from "@/components/room/RoomQuiz";
 import RoomTimer from "@/components/room/RoomTimer";
+import TestYourself from "@/components/room/TestYourself";
+import PointsDisplay from "@/components/room/PointsDisplay";
+import StoreModal from "@/components/room/StoreModal";
 
 const FONT = "'Times New Roman', Times, serif";
 
-type Tab = "chat" | "files" | "quiz" | "qa";
+type Tab = "chat" | "files" | "quiz" | "qa" | "test";
 
 const TAB_CONFIG: { id: Tab; label: string; emoji: string }[] = [
   { id: "chat", label: "Chat", emoji: "💬" },
   { id: "files", label: "Files", emoji: "📄" },
   { id: "quiz", label: "Quiz", emoji: "🧠" },
   { id: "qa", label: "Q&A", emoji: "❓" },
+  { id: "test", label: "Test", emoji: "📝" },
 ];
 
 const StudyRoom = () => {
   const { roomId } = useParams<{ roomId: string }>();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { points, awardPoints, spendPoints } = usePoints(user?.id);
+  const { isUnlocked, unlockFeature } = useUnlocks(user?.id);
   const [activeTab, setActiveTab] = useState<Tab>("chat");
   const [room, setRoom] = useState<any>(null);
   const [members, setMembers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [storeOpen, setStoreOpen] = useState(false);
 
   useEffect(() => {
     if (!roomId || !user) return;
@@ -85,6 +94,16 @@ const StudyRoom = () => {
     }
   };
 
+  const handleUnlock = async (item: typeof STORE_ITEMS[number]) => {
+    const success = await spendPoints(item.cost, `Unlocked ${item.name}`);
+    if (!success) return;
+    const expiresAt = item.duration
+      ? new Date(Date.now() + item.duration).toISOString()
+      : null;
+    await unlockFeature(item.id, expiresAt);
+    toast.success(`${item.emoji} ${item.name} unlocked!`);
+  };
+
   if (!user) { navigate("/auth"); return null; }
   if (loading) {
     return (
@@ -103,8 +122,8 @@ const StudyRoom = () => {
         <button onClick={() => navigate("/library")} className="text-warm-brown">
           <ArrowLeft className="h-5 w-5" />
         </button>
-        <div className="flex-1">
-          <h1 className="text-base font-bold text-warm-brown">{room?.name}</h1>
+        <div className="flex-1 min-w-0">
+          <h1 className="text-base font-bold text-warm-brown truncate">{room?.name}</h1>
           <div className="flex items-center gap-2">
             <button
               onClick={copyCode}
@@ -118,6 +137,13 @@ const StudyRoom = () => {
             </span>
           </div>
         </div>
+
+        {/* Points + Store */}
+        <PointsDisplay
+          points={points.totalPoints}
+          streak={points.dailyStreak}
+          onClick={() => setStoreOpen(true)}
+        />
 
         {/* Member avatars */}
         <div className="flex items-center gap-1">
@@ -151,12 +177,12 @@ const StudyRoom = () => {
       </div>
 
       {/* Tabs */}
-      <div className="flex border-b border-secondary px-2">
+      <div className="flex border-b border-secondary px-1 overflow-x-auto">
         {TAB_CONFIG.map((t) => (
           <button
             key={t.id}
             onClick={() => setActiveTab(t.id)}
-            className={`flex-1 py-3 text-center text-sm font-semibold transition-all ${
+            className={`flex-1 whitespace-nowrap py-3 text-center text-xs sm:text-sm font-semibold transition-all ${
               activeTab === t.id
                 ? "border-b-2 border-primary text-warm-brown"
                 : "text-muted-foreground hover:text-warm-brown-light"
@@ -173,7 +199,24 @@ const StudyRoom = () => {
         {activeTab === "files" && <RoomFiles roomId={roomId!} user={user} />}
         {activeTab === "quiz" && <RoomQuiz roomId={roomId!} user={user} />}
         {activeTab === "qa" && <RoomQA roomId={roomId!} user={user} />}
+        {activeTab === "test" && (
+          <TestYourself
+            roomId={roomId!}
+            user={user}
+            isUnlocked={isUnlocked}
+            onAwardPoints={awardPoints}
+          />
+        )}
       </div>
+
+      {/* Store Modal */}
+      <StoreModal
+        open={storeOpen}
+        onClose={() => setStoreOpen(false)}
+        totalPoints={points.totalPoints}
+        isUnlocked={isUnlocked}
+        onUnlock={handleUnlock}
+      />
     </div>
   );
 };
