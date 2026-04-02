@@ -21,6 +21,7 @@ Students today face "Context Switching" fatigue and digital distractions. Switch
 ├── public/              # Static assets (Pop-culture theme icons)
 ├── supabase/            # Database schema and migrations
 └── app/                 # Next.js pages (Bookshelf, Group Study, Dashboard)
+```
 
 ## ⚙️ Setup & Installation
 Clone the repo:
