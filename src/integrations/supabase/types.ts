@@ -14,6 +14,41 @@ export type Database = {
   }
   public: {
     Tables: {
+      points_history: {
+        Row: {
+          amount: number
+          created_at: string
+          id: string
+          reason: string
+          room_id: string | null
+          user_id: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          id?: string
+          reason: string
+          room_id?: string | null
+          user_id: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          id?: string
+          reason?: string
+          room_id?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "points_history_room_id_fkey"
+            columns: ["room_id"]
+            isOneToOne: false
+            referencedRelation: "study_rooms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           avatar_url: string | null
@@ -269,6 +304,98 @@ export type Database = {
           created_by?: string | null
           id?: string
           name?: string
+        }
+        Relationships: []
+      }
+      test_sets: {
+        Row: {
+          created_at: string
+          created_by: string
+          exam_type: string
+          id: string
+          questions: Json
+          room_id: string
+          topic: string
+          total_points_awarded: number
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          exam_type?: string
+          id?: string
+          questions?: Json
+          room_id: string
+          topic: string
+          total_points_awarded?: number
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          exam_type?: string
+          id?: string
+          questions?: Json
+          room_id?: string
+          topic?: string
+          total_points_awarded?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "test_sets_room_id_fkey"
+            columns: ["room_id"]
+            isOneToOne: false
+            referencedRelation: "study_rooms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_points: {
+        Row: {
+          daily_streak: number
+          id: string
+          last_login_date: string | null
+          total_points: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          daily_streak?: number
+          id?: string
+          last_login_date?: string | null
+          total_points?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          daily_streak?: number
+          id?: string
+          last_login_date?: string | null
+          total_points?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      user_unlocks: {
+        Row: {
+          expires_at: string | null
+          feature_name: string
+          id: string
+          unlocked_at: string
+          user_id: string
+        }
+        Insert: {
+          expires_at?: string | null
+          feature_name: string
+          id?: string
+          unlocked_at?: string
+          user_id: string
+        }
+        Update: {
+          expires_at?: string | null
+          feature_name?: string
+          id?: string
+          unlocked_at?: string
+          user_id?: string
         }
         Relationships: []
       }
