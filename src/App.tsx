@@ -15,6 +15,8 @@ import AuthPage from "./pages/AuthPage.tsx";
 import GroupStudy from "./pages/GroupStudy.tsx";
 import StudyRoom from "./pages/StudyRoom.tsx";
 import JoinRoom from "./pages/JoinRoom.tsx";
+import Bookshelf from "./pages/Bookshelf.tsx";
+import StudyReader from "./pages/StudyReader.tsx";
 import NotFound from "./pages/NotFound.tsx";
 
 const queryClient = new QueryClient();
