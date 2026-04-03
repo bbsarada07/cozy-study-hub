@@ -153,6 +153,7 @@ const Library = () => {
               <button
                 key={item.id}
                 onClick={() => {
+                  if (item.id === "bookshelf") navigate("/bookshelf");
                   if (item.id === "braindump") navigate("/braindump");
                   if (item.id === "ai-assistant") navigate("/ask-librarian");
                   if (item.id === "study-desk") { startFocus(); navigate("/focus"); }
