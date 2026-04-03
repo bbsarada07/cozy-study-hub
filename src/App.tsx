@@ -15,6 +15,8 @@ import AuthPage from "./pages/AuthPage.tsx";
 import GroupStudy from "./pages/GroupStudy.tsx";
 import StudyRoom from "./pages/StudyRoom.tsx";
 import JoinRoom from "./pages/JoinRoom.tsx";
+import Bookshelf from "./pages/Bookshelf.tsx";
+import StudyReader from "./pages/StudyReader.tsx";
 import NotFound from "./pages/NotFound.tsx";
 
 const queryClient = new QueryClient();
@@ -38,6 +40,8 @@ const App = () => (
             <Route path="/group-study" element={<GroupStudy />} />
             <Route path="/room/:roomId" element={<StudyRoom />} />
             <Route path="/join" element={<JoinRoom />} />
+            <Route path="/bookshelf" element={<Bookshelf />} />
+            <Route path="/reader/:fileId" element={<StudyReader />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>
