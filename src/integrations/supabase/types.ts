@@ -14,6 +14,85 @@ export type Database = {
   }
   public: {
     Tables: {
+      annotations: {
+        Row: {
+          annotation_type: string
+          color: string | null
+          created_at: string
+          data: Json
+          file_id: string
+          id: string
+          page_number: number
+          user_id: string
+        }
+        Insert: {
+          annotation_type: string
+          color?: string | null
+          created_at?: string
+          data?: Json
+          file_id: string
+          id?: string
+          page_number?: number
+          user_id: string
+        }
+        Update: {
+          annotation_type?: string
+          color?: string | null
+          created_at?: string
+          data?: Json
+          file_id?: string
+          id?: string
+          page_number?: number
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "annotations_file_id_fkey"
+            columns: ["file_id"]
+            isOneToOne: false
+            referencedRelation: "user_files"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      doubt_history: {
+        Row: {
+          answer: string | null
+          created_at: string
+          file_id: string
+          id: string
+          page_number: number | null
+          question: string
+          user_id: string
+        }
+        Insert: {
+          answer?: string | null
+          created_at?: string
+          file_id: string
+          id?: string
+          page_number?: number | null
+          question: string
+          user_id: string
+        }
+        Update: {
+          answer?: string | null
+          created_at?: string
+          file_id?: string
+          id?: string
+          page_number?: number | null
+          question?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "doubt_history_file_id_fkey"
+            columns: ["file_id"]
+            isOneToOne: false
+            referencedRelation: "user_files"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       points_history: {
         Row: {
           amount: number
@@ -307,6 +386,47 @@ export type Database = {
         }
         Relationships: []
       }
+      study_sessions: {
+        Row: {
+          completed: boolean
+          created_at: string
+          duration_minutes: number
+          end_time: string | null
+          file_id: string
+          id: string
+          start_time: string
+          user_id: string
+        }
+        Insert: {
+          completed?: boolean
+          created_at?: string
+          duration_minutes?: number
+          end_time?: string | null
+          file_id: string
+          id?: string
+          start_time?: string
+          user_id: string
+        }
+        Update: {
+          completed?: boolean
+          created_at?: string
+          duration_minutes?: number
+          end_time?: string | null
+          file_id?: string
+          id?: string
+          start_time?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "study_sessions_file_id_fkey"
+            columns: ["file_id"]
+            isOneToOne: false
+            referencedRelation: "user_files"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       test_sets: {
         Row: {
           created_at: string
@@ -347,6 +467,42 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      user_files: {
+        Row: {
+          created_at: string
+          file_name: string
+          file_size: number | null
+          file_type: string
+          file_url: string
+          id: string
+          last_page: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          file_name: string
+          file_size?: number | null
+          file_type?: string
+          file_url: string
+          id?: string
+          last_page?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          file_name?: string
+          file_size?: number | null
+          file_type?: string
+          file_url?: string
+          id?: string
+          last_page?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
       }
       user_points: {
         Row: {
