@@ -8,7 +8,6 @@ import bookshelfImg from "@/assets/features/bookshelf.png";
 import aiLibrarianImg from "@/assets/features/ai-librarian.png";
 import braindumpImg from "@/assets/features/braindump.png";
 import groupStudyImg from "@/assets/features/group-study.png";
-import storeImg from "@/assets/features/store.png";
 import studyDeskImg from "@/assets/features/study-desk.png";
 
 const FONT = "'Times New Roman', Times, serif";
@@ -43,12 +42,6 @@ const featureItems = [
     label: "Group Study",
     img: groupStudyImg,
     gridArea: "groupstudy",
-  },
-  {
-    id: "store",
-    label: "Test Yourself",
-    img: storeImg,
-    gridArea: "store",
   },
 ];
 
@@ -141,11 +134,12 @@ const Library = () => {
           <div
             className="grid w-full max-w-2xl gap-4"
             style={{
-              gridTemplateColumns: "1fr 1fr 1fr",
-              gridTemplateRows: "auto auto",
+              gridTemplateColumns: "1fr 1fr",
+              gridTemplateRows: "auto auto auto",
               gridTemplateAreas: `
-                "shelf1 shelf2 studydesk"
-                "braindump groupstudy store"
+                "shelf1 shelf2"
+                "braindump studydesk"
+                "groupstudy groupstudy"
               `,
             }}
           >
@@ -158,7 +152,6 @@ const Library = () => {
                   if (item.id === "ai-assistant") navigate("/ask-librarian");
                   if (item.id === "study-desk") { startFocus(); navigate("/focus"); }
                   if (item.id === "group-study") navigate("/group-study");
-                  if (item.id === "store") navigate("/group-study");
                 }}
                 className="group flex flex-col items-center gap-2 rounded-2xl p-3 transition-all duration-200 hover:scale-105 hover:shadow-xl active:scale-95"
                 style={{
