@@ -43,12 +43,6 @@ const featureItems = [
     img: groupStudyImg,
     gridArea: "groupstudy",
   },
-  {
-    id: "store",
-    label: "Test Yourself",
-    img: storeImg,
-    gridArea: "store",
-  },
 ];
 
 const Library = () => {
