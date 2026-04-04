@@ -216,6 +216,7 @@ const StudyRoom = () => {
         totalPoints={points.totalPoints}
         isUnlocked={isUnlocked}
         onUnlock={handleUnlock}
+        recommendation={getRecommendation()}
       />
     </div>
   );
