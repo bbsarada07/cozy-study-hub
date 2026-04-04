@@ -32,7 +32,7 @@ const StudyRoom = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { points, awardPoints, spendPoints } = usePoints(user?.id);
-  const { isUnlocked, unlockFeature } = useUnlocks(user?.id);
+  const { isUnlocked, unlockFeature, getRecommendation } = useUnlocks(user?.id);
   const [activeTab, setActiveTab] = useState<Tab>("chat");
   const [room, setRoom] = useState<any>(null);
   const [members, setMembers] = useState<any[]>([]);
@@ -216,6 +216,7 @@ const StudyRoom = () => {
         totalPoints={points.totalPoints}
         isUnlocked={isUnlocked}
         onUnlock={handleUnlock}
+        recommendation={getRecommendation()}
       />
     </div>
   );
