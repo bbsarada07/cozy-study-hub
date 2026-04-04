@@ -140,11 +140,12 @@ const Library = () => {
           <div
             className="grid w-full max-w-2xl gap-4"
             style={{
-              gridTemplateColumns: "1fr 1fr 1fr",
-              gridTemplateRows: "auto auto",
+              gridTemplateColumns: "1fr 1fr",
+              gridTemplateRows: "auto auto auto",
               gridTemplateAreas: `
-                "shelf1 shelf2 studydesk"
-                "braindump groupstudy store"
+                "shelf1 shelf2"
+                "braindump studydesk"
+                "groupstudy groupstudy"
               `,
             }}
           >
