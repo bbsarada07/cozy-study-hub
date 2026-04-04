@@ -1,11 +1,12 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
 import { User } from "@supabase/supabase-js";
-import { Loader2, ChevronRight, ChevronLeft, Check, X } from "lucide-react";
+import { Loader2, ChevronRight, ChevronLeft, Check, X, Upload, FileText } from "lucide-react";
 
 interface Question {
   id: number;
@@ -33,7 +34,12 @@ const Q_TYPES = [
 
 const TestYourself = ({ roomId, user, isUnlocked, onAwardPoints }: TestYourselfProps) => {
   const [step, setStep] = useState<"setup" | "taking" | "results">("setup");
+  const [inputMode, setInputMode] = useState<"topic" | "file">("topic");
   const [topic, setTopic] = useState("");
+  const [fileText, setFileText] = useState("");
+  const [fileName, setFileName] = useState("");
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [examType, setExamType] = useState("Custom");
   const [selectedTypes, setSelectedTypes] = useState<string[]>(["mcq", "oneword", "short", "long"]);
   const [questionCount, setQuestionCount] = useState(10);
@@ -44,7 +50,6 @@ const TestYourself = ({ roomId, user, isUnlocked, onAwardPoints }: TestYourselfP
   const [submitted, setSubmitted] = useState<Record<number, boolean>>({});
   const [score, setScore] = useState(0);
 
-  // Blurting mode
   const hasBlurting = isUnlocked("blurting_method");
   const [blurtMode, setBlurtMode] = useState(false);
   const [blurtText, setBlurtText] = useState("");
@@ -61,13 +66,54 @@ const TestYourself = ({ roomId, user, isUnlocked, onAwardPoints }: TestYourselfP
     );
   };
 
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploading(true);
+    setFileName(file.name);
+
+    try {
+      if (file.type === "text/plain" || file.name.endsWith(".txt") || file.name.endsWith(".md")) {
+        const text = await file.text();
+        setFileText(text.slice(0, 8000));
+        setTopic(file.name.replace(/\.[^.]+$/, ""));
+      } else if (file.type === "application/pdf") {
+        // For PDFs, we read as text (basic extraction)
+        const text = await file.text();
+        // Extract readable content from PDF binary
+        const readable = text.replace(/[^\x20-\x7E\n]/g, " ").replace(/\s+/g, " ").trim();
+        if (readable.length > 100) {
+          setFileText(readable.slice(0, 8000));
+        } else {
+          setFileText(`Study material from file: ${file.name}`);
+        }
+        setTopic(file.name.replace(/\.[^.]+$/, ""));
+      } else {
+        // For images and other files, use filename as topic
+        setFileText(`Study content from uploaded file: ${file.name}`);
+        setTopic(file.name.replace(/\.[^.]+$/, ""));
+      }
+      toast.success(`File "${file.name}" loaded`);
+    } catch {
+      toast.error("Failed to read file");
+    } finally {
+      setUploading(false);
+    }
+  };
+
   const generateQuestions = async () => {
-    if (!topic.trim()) { toast.error("Enter a topic"); return; }
+    const content = inputMode === "file" ? fileText : topic;
+    if (!content.trim()) {
+      toast.error(inputMode === "file" ? "Upload a file first" : "Enter a topic");
+      return;
+    }
     if (selectedTypes.length === 0) { toast.error("Select at least one question type"); return; }
 
     setGenerating(true);
     try {
-      let prompt = `You are an exam question generator. Create exactly ${questionCount} questions about "${topic}".
+      let prompt = `You are an exam question generator. Create exactly ${questionCount} questions.
+Content/Topic: "${content}"
 Exam type: ${examType}
 Question types: ${selectedTypes.join(", ")}`;
 
@@ -87,17 +133,11 @@ Generate real, specific, exam-quality questions about the topic. NOT generic que
 
       if (error) throw error;
 
-      let parsed: Question[];
       const text = typeof data === "string" ? data : data?.text || data?.content || JSON.stringify(data);
-      
-      // Extract JSON from response
       const jsonMatch = text.match(/\[[\s\S]*\]/);
-      if (jsonMatch) {
-        parsed = JSON.parse(jsonMatch[0]);
-      } else {
-        throw new Error("Could not parse questions from AI response");
-      }
+      if (!jsonMatch) throw new Error("Could not parse questions from AI response");
 
+      const parsed: Question[] = JSON.parse(jsonMatch[0]);
       setQuestions(parsed);
       setStep("taking");
       setCurrentQ(0);
@@ -130,16 +170,15 @@ Generate real, specific, exam-quality questions about the topic. NOT generic que
   };
 
   const finishTest = async () => {
-    const bonus = Object.keys(submitted).length === questions.length ? 20 : 0;
+    const bonus = Object.keys(submitted).length === questions.length ? 30 : 0;
     if (bonus > 0) {
       onAwardPoints(bonus, "Completed full test", roomId);
     }
 
-    // Save test set
     await supabase.from("test_sets").insert({
       room_id: roomId,
       created_by: user.id,
-      topic,
+      topic: topic || fileName,
       exam_type: examType,
       questions: questions as any,
       total_points_awarded: score * 2 + bonus,
@@ -190,13 +229,83 @@ Compare what the student wrote with the correct answer. List what they got right
       <div className="flex h-full flex-col overflow-y-auto p-4">
         <h2 className="mb-4 text-lg font-bold text-foreground">📝 Test Yourself</h2>
 
-        <label className="mb-1 text-sm font-medium text-muted-foreground">Topic</label>
-        <Input
-          value={topic}
-          onChange={(e) => setTopic(e.target.value)}
-          placeholder="e.g. Photosynthesis, Newton's Laws..."
-          className="mb-4"
-        />
+        {/* Input Mode Toggle */}
+        <div className="mb-4 flex gap-2">
+          <button
+            onClick={() => setInputMode("topic")}
+            className={`flex-1 rounded-lg py-2.5 text-sm font-semibold transition-all ${
+              inputMode === "topic"
+                ? "bg-primary text-primary-foreground"
+                : "bg-secondary text-secondary-foreground hover:bg-secondary/80"
+            }`}
+          >
+            ✏️ Enter Topic
+          </button>
+          <button
+            onClick={() => setInputMode("file")}
+            className={`flex-1 rounded-lg py-2.5 text-sm font-semibold transition-all ${
+              inputMode === "file"
+                ? "bg-primary text-primary-foreground"
+                : "bg-secondary text-secondary-foreground hover:bg-secondary/80"
+            }`}
+          >
+            📄 Upload File
+          </button>
+        </div>
+
+        {inputMode === "topic" ? (
+          <>
+            <label className="mb-1 text-sm font-medium text-muted-foreground">Topic</label>
+            <Input
+              value={topic}
+              onChange={(e) => setTopic(e.target.value)}
+              placeholder="e.g. Photosynthesis, Newton's Laws..."
+              className="mb-4"
+            />
+          </>
+        ) : (
+          <div className="mb-4">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".pdf,.txt,.md,.png,.jpg,.jpeg"
+              onChange={handleFileUpload}
+              className="hidden"
+            />
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploading}
+              className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border bg-card p-6 text-sm text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground"
+            >
+              {uploading ? (
+                <Loader2 className="h-5 w-5 animate-spin" />
+              ) : fileName ? (
+                <>
+                  <FileText className="h-5 w-5 text-primary" />
+                  <span className="font-medium text-foreground">{fileName}</span>
+                </>
+              ) : (
+                <>
+                  <Upload className="h-5 w-5" />
+                  <span>Upload PDF, TXT, or Image</span>
+                </>
+              )}
+            </button>
+            {fileText && (
+              <p className="mt-2 text-xs text-muted-foreground">
+                Content extracted ({fileText.length} chars). You can also edit the topic:
+              </p>
+            )}
+            {fileText && (
+              <Input
+                value={topic}
+                onChange={(e) => setTopic(e.target.value)}
+                placeholder="Override topic name..."
+                className="mt-1"
+              />
+            )}
+          </div>
+        )}
 
         <label className="mb-1 text-sm font-medium text-muted-foreground">Exam Type</label>
         <div className="mb-4 flex flex-wrap gap-2">
@@ -273,7 +382,7 @@ Compare what the student wrote with the correct answer. List what they got right
 
         <Button onClick={generateQuestions} disabled={generating} className="w-full gap-2">
           {generating ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-          {generating ? "Generating…" : "Generate Questions"}
+          {generating ? "Generating…" : "Generate Questions 🚀"}
         </Button>
       </div>
     );
@@ -283,6 +392,7 @@ Compare what the student wrote with the correct answer. List what they got right
   if (step === "taking") {
     const q = questions[currentQ];
     const isSubmitted = submitted[q?.id];
+    const answeredCount = Object.keys(submitted).length;
 
     return (
       <div className="flex h-full flex-col overflow-y-auto p-4">
@@ -291,17 +401,11 @@ Compare what the student wrote with the correct answer. List what they got right
             Question {currentQ + 1} of {questions.length}
           </span>
           <span className="rounded-full bg-accent/20 px-2 py-0.5 text-xs font-bold text-accent-foreground">
-            Score: {score}/{Object.keys(submitted).length}
+            Score: {score}/{answeredCount}
           </span>
         </div>
 
-        {/* Progress bar */}
-        <div className="mb-4 h-1.5 w-full rounded-full bg-secondary">
-          <div
-            className="h-full rounded-full bg-primary transition-all"
-            style={{ width: `${((currentQ + 1) / questions.length) * 100}%` }}
-          />
-        </div>
+        <Progress value={((currentQ + 1) / questions.length) * 100} className="mb-4 h-1.5" />
 
         <div className="mb-2 rounded-lg border border-border bg-card p-4">
           <span className="mb-2 inline-block rounded-full bg-muted px-2 py-0.5 text-xs font-semibold uppercase text-muted-foreground">
@@ -310,7 +414,6 @@ Compare what the student wrote with the correct answer. List what they got right
           <p className="text-sm font-medium text-foreground">{q.question}</p>
         </div>
 
-        {/* Answer area */}
         {q.type === "mcq" && q.options ? (
           <div className="mb-4 space-y-2">
             {q.options.map((opt, i) => {
@@ -325,9 +428,9 @@ Compare what the student wrote with the correct answer. List what they got right
                   disabled={!!isSubmitted}
                   className={`w-full rounded-lg border p-3 text-left text-sm transition-all ${
                     correct
-                      ? "border-green-500 bg-green-50 text-green-800"
+                      ? "border-green-500 bg-green-50 text-green-800 dark:bg-green-950 dark:text-green-200"
                       : wrong
-                      ? "border-red-500 bg-red-50 text-red-800"
+                      ? "border-red-500 bg-red-50 text-red-800 dark:bg-red-950 dark:text-red-200"
                       : selected
                       ? "border-primary bg-primary/10 text-foreground"
                       : "border-border bg-card text-foreground hover:border-primary/50"
@@ -365,7 +468,6 @@ Compare what the student wrote with the correct answer. List what they got right
           </div>
         )}
 
-        {/* Blurting Mode */}
         {hasBlurting && isSubmitted && (
           <div className="mb-3 rounded-lg border border-primary/30 bg-primary/5 p-3">
             <button
@@ -395,7 +497,6 @@ Compare what the student wrote with the correct answer. List what they got right
           </div>
         )}
 
-        {/* Navigation */}
         <div className="flex items-center justify-between pt-2">
           <Button
             variant="outline"
@@ -425,16 +526,23 @@ Compare what the student wrote with the correct answer. List what they got right
   }
 
   // RESULTS STEP
+  const totalEarned = score * 2 + (Object.keys(submitted).length === questions.length ? 30 : 0);
+  const percentage = questions.length > 0 ? Math.round((score / questions.length) * 100) : 0;
+
   return (
     <div className="flex h-full flex-col items-center justify-center p-6 text-center">
       <div className="text-5xl mb-4">🎉</div>
       <h2 className="text-xl font-bold text-foreground mb-2">Test Complete!</h2>
+      <div className="mb-4 w-full max-w-xs">
+        <Progress value={percentage} className="h-3 mb-2" />
+        <p className="text-sm text-muted-foreground">{percentage}% accuracy</p>
+      </div>
       <p className="text-muted-foreground mb-1">
         You scored <strong className="text-foreground">{score}</strong> out of{" "}
         <strong className="text-foreground">{questions.length}</strong>
       </p>
       <p className="text-sm text-accent-foreground font-semibold mb-6">
-        +{score * 2 + (Object.keys(submitted).length === questions.length ? 20 : 0)} points earned
+        +{totalEarned} points earned ⭐
       </p>
       <Button onClick={resetTest}>Take Another Test</Button>
     </div>
