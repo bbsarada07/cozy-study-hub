@@ -8,7 +8,7 @@ import bookshelfImg from "@/assets/features/bookshelf.png";
 import aiLibrarianImg from "@/assets/features/ai-librarian.png";
 import braindumpImg from "@/assets/features/braindump.png";
 import groupStudyImg from "@/assets/features/group-study.png";
-import storeImg from "@/assets/features/store.png";
+import studyDeskImg from "@/assets/features/study-desk.png";
 
 const FONT = "'Times New Roman', Times, serif";
 
